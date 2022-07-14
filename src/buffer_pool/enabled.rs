@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::{mem::replace, ops::Deref, sync::Arc};
 
 const DEFAULT_MYSQL_BUFFER_POOL_CAP: usize = 128;
-const DEFAULT_MYSQL_BUFFER_SIZE_CAP: usize = 4 * 1024 * 1024;
+const DEFAULT_MYSQL_BUFFER_SIZE_CAP: usize = 8 * 1024 * 1024;
 
 static BUFFER_POOL: Lazy<Arc<BufferPool>> = Lazy::new(|| Default::default());
 
@@ -41,33 +41,23 @@ impl Inner {
 
 /// Smart pointer to a buffer pool.
 #[derive(Debug, Clone)]
-pub struct BufferPool(Option<Arc<Inner>>);
+pub struct BufferPool(Arc<Inner>);
 
 impl BufferPool {
     pub fn new() -> Self {
-        let pool_cap = std::env::var("RUST_MYSQL_BUFFER_POOL_CAP")
-            .ok()
-            .and_then(|x| x.parse().ok())
-            .unwrap_or(DEFAULT_MYSQL_BUFFER_POOL_CAP);
+        let pool_cap = DEFAULT_MYSQL_BUFFER_POOL_CAP;
 
-        let buffer_cap = std::env::var("RUST_MYSQL_BUFFER_SIZE_CAP")
-            .ok()
-            .and_then(|x| x.parse().ok())
-            .unwrap_or(DEFAULT_MYSQL_BUFFER_SIZE_CAP);
+        let buffer_cap = DEFAULT_MYSQL_BUFFER_SIZE_CAP;
 
-        Self((pool_cap > 0).then(|| {
-            Arc::new(Inner {
-                buffer_cap,
-                pool: ArrayQueue::new(pool_cap),
-            })
+        Self(Arc::new(Inner {
+            buffer_cap,
+            pool: ArrayQueue::new(pool_cap),
         }))
     }
 
+    #[inline(always)]
     pub fn get(self: &Arc<Self>) -> Buffer {
-        match self.0 {
-            Some(ref inner) => inner.get(),
-            None => Buffer(Vec::new(), None),
-        }
+        self.0.get()
     }
 }
 
